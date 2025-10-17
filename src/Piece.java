@@ -1,4 +1,4 @@
-package chess;
+package src;
 
 abstract class Piece {
 

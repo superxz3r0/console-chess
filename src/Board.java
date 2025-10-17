@@ -1,4 +1,4 @@
-package chess;
+package src;
 
 import java.util.Arrays;
 import java.util.List;
@@ -10,19 +10,10 @@ public class Board {
 
     private final Piece[][] grid;
 
-    /**
-     * Creates an empty 8x8 board.
-     */
     public Board() {
         this.grid = new Piece[BOARD_SIZE][BOARD_SIZE];
     }
 
-    /**
-     * Gets the piece at a position.
-     *
-     * @param position the board coordinate
-     * @return the piece at that coordinate, or null if empty
-     */
     public Piece get(Position position) {
         return grid[position.getX()][position.getY()];
     }

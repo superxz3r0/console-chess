@@ -1,4 +1,4 @@
-package chess;
+package src;
 
 public final class Position {
 
