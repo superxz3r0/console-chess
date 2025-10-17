@@ -1,13 +1,6 @@
 package src;
 
 public enum Color {
-    WHITE,
-    BLACK;
-
-    public Color opposite() {
-        if (this == WHITE) {
-            return BLACK;
-        }
-        return WHITE;
-    }
+    WHITE, BLACK;
+    public Color opposite() { return this == WHITE ? BLACK : WHITE; }
 }

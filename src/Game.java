@@ -4,153 +4,121 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
 
-
 public class Game {
+    private final Scanner in;
+    private Board board;
+    private Color turn = Color.WHITE;
+    private String whiteName = "White";
+    private String blackName = "Black";
+    private final List<String> history = new ArrayList<>();
 
-    private static final String QUIT_SHORT = "q";
-    private static final String QUIT_LONG = "quit";
+    public Game(Scanner in){ this.in = in; this.board = Board.standardSetup(); }
 
-    private final Scanner scanner;
-    private final Board board;
-    private String whitePlayerName;
-    private String blackPlayerName;
-    private Color currentTurn;
-    private boolean gameOver;
-    private final List<String> moveHistory;
+    public void run(){
+        System.out.println("== Console Chess ==");
+        System.out.print("Enter White player name: ");
+        String w = in.nextLine().trim();
+        if (!w.isEmpty()) whiteName = w;
+        System.out.print("Enter Black player name: ");
+        String b = in.nextLine().trim();
+        if (!b.isEmpty()) blackName = b;
 
-    /**
-     * Creates a new Game instance with fresh state.
-     */
-    public Game() {
-        this.scanner = new Scanner(System.in);
-        this.board = new Board();
-        this.currentTurn = Color.WHITE;
-        this.gameOver = false;
-        this.moveHistory = new ArrayList<>();
-    }
-
-    /**
-     * Runs the main game loop until the game ends or the user quits.
-     */
-    public void run() {
-        printWelcome();
-        promptPlayerNames();
-        board.setupInitial();
-
-        while (!gameOver) {
-            board.print(whitePlayerName, blackPlayerName, currentTurn, moveHistory);
-
-            String input = promptForMove();
-            if (shouldQuit(input)) {
-                System.out.println("Goodbye!");
+        while (true) {
+            board.print(turn, history);
+            System.out.print(nameOf(turn) + " to move > ");
+            String cmd = in.nextLine().trim();
+            if (cmd.equalsIgnoreCase("q") || cmd.equalsIgnoreCase("quit")) {
+                System.out.println("Goodbye.");
                 return;
             }
+            if (cmd.equalsIgnoreCase("hint")) { printHelp(); continue; }
+            if (cmd.startsWith("pip")) { handlePip(cmd); continue; }
 
-            if (!isCoordinateMove(input)) {
-                System.out.println("Invalid input. Use a four‑character move like e2e4.\n");
+            if (cmd.length()==4) {
+                String fromStr = cmd.substring(0,2);
+                String toStr   = cmd.substring(2,4);
+                try {
+                    Position from = Position.fromAlgebraic(fromStr);
+                    Position to   = Position.fromAlgebraic(toStr);
+                    if (!Board.inBounds(from.getX(), from.getY()) || !Board.inBounds(to.getX(), to.getY())) {
+                        System.out.println("Invalid square."); continue;
+                    }
+                    if (!board.isLegalMove(from, to, turn)) {
+                        System.out.println("Illegal move. Type 'pip e2' to see moves from e2."); continue;
+                    }
+
+                    Board.MoveResult res = board.move(from, to, turn);
+
+                    String promoSuffix = "";
+                    if (board.isPromotionPending(to)) {
+                        PieceType choice = askPromotion(turn);
+                        board.promote(to, choice);
+                        switch (choice) {
+                            case QUEEN:  promoSuffix = "=Q"; break;
+                            case ROOK:   promoSuffix = "=R"; break;
+                            case BISHOP: promoSuffix = "=B"; break;
+                            case KNIGHT: promoSuffix = "=N"; break;
+                            default:     promoSuffix = "=Q";
+                        }
+                    }
+
+                    String notation = fromStr + (res.wasCapture ? "x" : "") + toStr + promoSuffix + (res.gaveCheck ? "+" : "");
+                    history.add(notation);
+
+                    if (res.capturedKing) {
+                        board.print(turn, history);
+                        System.out.println("King captured — " + nameOf(turn) + " wins!");
+                        return;
+                    }
+
+                    turn = turn.opposite();
+                } catch (IllegalArgumentException | IllegalMoveException ex) {
+                    System.out.println("Error: " + ex.getMessage());
+                }
                 continue;
             }
 
-            Position from = Position.fromAlgebraic(input.substring(0, 2));
-            Position to = Position.fromAlgebraic(input.substring(2, 4));
+            System.out.println("Unknown command. Type 'hint' for help.");
+        }
+    }
 
-            try {
-                MoveResult result = attemptMove(from, to);
-                if (result == MoveResult.MOVED) {
-                    currentTurn = currentTurn.opposite();
-                } else if (result == MoveResult.CAPTURED_KING) {
-                    board.print(whitePlayerName, blackPlayerName, currentTurn, moveHistory);
-                    String winnerName = (currentTurn == Color.WHITE) ? whitePlayerName : blackPlayerName;
-                    System.out.println("\n*** " + winnerName + " wins by capturing the King. Game over. ***");
-                    gameOver = true;
-                }
-            } catch (IllegalMoveException ex) {
-                System.out.println("Illegal move: " + ex.getMessage() + "\n");
+    private void handlePip(String cmd) {
+        String[] parts = cmd.split("\\s+");
+        if (parts.length != 2) {
+            System.out.println("Usage: pip <square>. Example: pip e2");
+            return;
+        }
+        try {
+            Position from = Position.fromAlgebraic(parts[1]);
+            List<String> moves = board.legalMovesFrom(from, turn);
+            if (moves.isEmpty()) System.out.println("No legal moves from " + parts[1] + " for " + nameOf(turn) + ".");
+            else System.out.println("Legal moves: " + String.join(" ", moves));
+        } catch (IllegalArgumentException e) {
+            System.out.println("Bad square.");
+        }
+    }
+
+    private String nameOf(Color c){ return c==Color.WHITE ? whiteName : blackName; }
+
+    private void printHelp() {
+        System.out.println("Commands:");
+        System.out.println("  e2e4    Make a move (from-to).");
+        System.out.println("  pip e2  List legal moves from a square for the side to move.");
+        System.out.println("  hint    Show this help.");
+        System.out.println("  q       Quit.");
+    }
+
+    private PieceType askPromotion(Color color) {
+        while (true) {
+            System.out.print(nameOf(color) + " promotion (q/r/b/n): ");
+            String s = in.nextLine().trim().toLowerCase();
+            switch (s) {
+                case "q": return PieceType.QUEEN;
+                case "r": return PieceType.ROOK;
+                case "b": return PieceType.BISHOP;
+                case "n": return PieceType.KNIGHT;
+                default: System.out.println("Please type q, r, b, or n.");
             }
         }
-    }
-
-    private void printWelcome() {
-        System.out.println("Console Chess — Required Features Only");
-        System.out.println();
-    }
-
-    private void promptPlayerNames() {
-        System.out.print("Enter White player name: ");
-        this.whitePlayerName = readNonEmptyOrDefault("White");
-
-        System.out.print("Enter Black player name: ");
-        this.blackPlayerName = readNonEmptyOrDefault("Black");
-        System.out.println();
-    }
-
-    private String readNonEmptyOrDefault(String defaultValue) {
-        String value = scanner.nextLine();
-        if (value == null) {
-            return defaultValue;
-        }
-        value = value.trim();
-        if (value.isEmpty()) {
-            return defaultValue;
-        }
-        return value;
-    }
-
-    private String promptForMove() {
-        System.out.print("Enter move (e.g., e2e4), or 'q' to quit: ");
-        return scanner.nextLine().trim();
-    }
-
-    private boolean shouldQuit(String input) {
-        return QUIT_SHORT.equalsIgnoreCase(input) || QUIT_LONG.equalsIgnoreCase(input);
-    }
-
-    private boolean isCoordinateMove(String input) {
-        return input != null && input.matches("(?i)^[a-h][1-8][a-h][1-8]$");
-    }
-
-    private MoveResult attemptMove(Position from, Position to) throws IllegalMoveException {
-        Piece movingPiece = board.get(from);
-        if (movingPiece == null) {
-            throw new IllegalMoveException("No piece on " + from + ".");
-        }
-
-        if (movingPiece.getColor() != currentTurn) {
-            throw new IllegalMoveException("It's not your turn.");
-        }
-
-        Piece targetPiece = board.get(to);
-        if (targetPiece != null && targetPiece.getColor() == movingPiece.getColor()) {
-            throw new IllegalMoveException("Destination square is occupied by your own piece.");
-        }
-
-        boolean basicValid = movingPiece.isValidBasicMove(board, from, to);
-        if (!basicValid) {
-            throw new IllegalMoveException("That piece cannot move like that.");
-        }
-
-        Board trialBoard = board.copy();
-        trialBoard.move(from, to);
-        boolean leavesKingInCheck = trialBoard.isKingInCheck(currentTurn);
-        if (leavesKingInCheck) {
-            throw new IllegalMoveException("Move leaves your King in check.");
-        }
-
-        if (targetPiece != null && (targetPiece instanceof King)) {
-            String notation = movingPiece.algebraic(from, to, targetPiece, true);
-            board.move(from, to);
-            moveHistory.add(notation);
-            return MoveResult.CAPTURED_KING;
-        }
-
-        String notation = movingPiece.algebraic(from, to, targetPiece, false);
-        board.move(from, to);
-        moveHistory.add(notation);
-        return MoveResult.MOVED;
-    }
-
-    private enum MoveResult {
-        MOVED,
-        CAPTURED_KING
     }
 }

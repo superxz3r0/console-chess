@@ -1,317 +1,115 @@
 package src;
 
 abstract class Piece {
-
     private final Color color;
-    private boolean hasMoved;
+    private boolean moved;
 
-    protected Piece(Color color) {
-        this.color = color;
-        this.hasMoved = false;
-    }
+    protected Piece(Color color) { this.color = color; }
+    public Color getColor() { return color; }
+    public boolean hasMoved() { return moved; }
+    public void setMoved() { moved = true; }
 
-    public Color getColor() {
-        return color;
-    }
+    abstract PieceType getType();
+    abstract char symbol(); 
+    abstract boolean isLegalMove(Board board, Position from, Position to);
 
-    public boolean hasMoved() {
-        return hasMoved;
-    }
-
-    public void setHasMoved(boolean hasMoved) {
-        this.hasMoved = hasMoved;
-    }
-
-    abstract String shortName();
-    abstract boolean isValidBasicMove(Board board, Position from, Position to);
-    abstract boolean canAttack(Board board, Position from, Position to);
-
-    String symbol() {
-        String side = (color == Color.WHITE) ? "w" : "b";
-        return side + shortName();
-    }
-
-    Piece clonePiece() {
-        Piece copy;
-        if (this instanceof Pawn) {
-            copy = new Pawn(color);
-        } else if (this instanceof Rook) {
-            copy = new Rook(color);
-        } else if (this instanceof Knight) {
-            copy = new Knight(color);
-        } else if (this instanceof Bishop) {
-            copy = new Bishop(color);
-        } else if (this instanceof Queen) {
-            copy = new Queen(color);
-        } else {
-            copy = new King(color);
+    boolean isPathClear(Board board, Position from, Position to) {
+        int dx = Integer.compare(to.getX(), from.getX());
+        int dy = Integer.compare(to.getY(), from.getY());
+        int x = from.getX() + dx;
+        int y = from.getY() + dy;
+        while (x != to.getX() || y != to.getY()) {
+            if (board.get(x, y) != null) return false;
+            x += dx; y += dy;
         }
-        copy.setHasMoved(this.hasMoved);
-        return copy;
-    }
-
-
-    String algebraic(Position from, Position to, Piece captured, boolean capturedKing) {
-        String pieceName = shortName();
-        String connector;
-        if (captured != null) {
-            if (capturedKing) {
-                connector = "xK";
-            } else {
-                connector = "x";
-            }
-        } else {
-            connector = "-";
-        }
-        return pieceName + "@" + from + connector + to;
+        return true;
     }
 }
 
-// ------------------- Pawn -------------------
-class Pawn extends Piece {
-
-    Pawn(Color color) {
-        super(color);
+final class King extends Piece {
+    King(Color c) { super(c); }
+    @Override PieceType getType() { return PieceType.KING; }
+    @Override char symbol() { return getColor() == Color.WHITE ? 'K' : 'k'; }
+    @Override boolean isLegalMove(Board b, Position f, Position t) {
+        int dx = Math.abs(t.getX() - f.getX());
+        int dy = Math.abs(t.getY() - f.getY());
+        return dx <= 1 && dy <= 1 && (dx + dy) > 0;
     }
+}
 
-    @Override
-    String shortName() {
-        return "P";
-    }
-
-    @Override
-    boolean isValidBasicMove(Board board, Position from, Position to) {
-        int direction;
-        int startRank;
-        if (getColor() == Color.WHITE) {
-            direction = 1;
-            startRank = 1;
-        } else {
-            direction = -1;
-            startRank = 6;
-        }
-
-        int dx = to.getX() - from.getX();
-        int dy = to.getY() - from.getY();
-        Piece target = board.get(to);
-
-        if (dx == 0) {
-            if (dy == direction && target == null) {
-                return true;
-            }
-            if (from.getY() == startRank && dy == 2 * direction && target == null) {
-                Position mid = new Position(from.getX(), from.getY() + direction);
-                Piece middle = board.get(mid);
-                return middle == null;
-            }
-            return false;
-        }
-
-        if (Math.abs(dx) == 1 && dy == direction && target != null && target.getColor() != getColor()) {
-            return true;
-        }
-
+final class Queen extends Piece {
+    Queen(Color c) { super(c); }
+    @Override PieceType getType() { return PieceType.QUEEN; }
+    @Override char symbol() { return getColor() == Color.WHITE ? 'Q' : 'q'; }
+    @Override boolean isLegalMove(Board b, Position f, Position t) {
+        int dx = Math.abs(t.getX() - f.getX());
+        int dy = Math.abs(t.getY() - f.getY());
+        if (dx == 0 || dy == 0 || dx == dy) return isPathClear(b, f, t);
         return false;
     }
+}
 
-    @Override
-    boolean canAttack(Board board, Position from, Position to) {
-        int direction = (getColor() == Color.WHITE) ? 1 : -1;
-        int dx = to.getX() - from.getX();
-        int dy = to.getY() - from.getY();
-        return Math.abs(dx) == 1 && dy == direction;
+final class Rook extends Piece {
+    Rook(Color c) { super(c); }
+    @Override PieceType getType() { return PieceType.ROOK; }
+    @Override char symbol() { return getColor() == Color.WHITE ? 'R' : 'r'; }
+    @Override boolean isLegalMove(Board b, Position f, Position t) {
+        if (f.getX() != t.getX() && f.getY() != t.getY()) return false;
+        return isPathClear(b, f, t);
     }
 }
 
-// ------------------- Rook -------------------
-class Rook extends Piece {
-
-    Rook(Color color) {
-        super(color);
-    }
-
-    @Override
-    String shortName() {
-        return "R";
-    }
-
-    @Override
-    boolean isValidBasicMove(Board board, Position from, Position to) {
-        int dx = to.getX() - from.getX();
-        int dy = to.getY() - from.getY();
-
-        boolean isStraight = (dx == 0 || dy == 0);
-        if (!isStraight) {
-            return false;
-        }
-
-        boolean clear = board.isPathClear(from, to);
-        if (!clear) {
-            return false;
-        }
-
-        Piece target = board.get(to);
-        return target == null || target.getColor() != getColor();
-    }
-
-    @Override
-    boolean canAttack(Board board, Position from, Position to) {
-        int dx = to.getX() - from.getX();
-        int dy = to.getY() - from.getY();
-        boolean isStraight = (dx == 0 || dy == 0);
-        return isStraight && board.isPathClear(from, to);
+final class Bishop extends Piece {
+    Bishop(Color c) { super(c); }
+    @Override PieceType getType() { return PieceType.BISHOP; }
+    @Override char symbol() { return getColor() == Color.WHITE ? 'B' : 'b'; }
+    @Override boolean isLegalMove(Board b, Position f, Position t) {
+        int dx = Math.abs(t.getX() - f.getX());
+        int dy = Math.abs(t.getY() - f.getY());
+        if (dx != dy) return false;
+        return isPathClear(b, f, t);
     }
 }
 
-// ------------------- Knight -------------------
-class Knight extends Piece {
-
-    Knight(Color color) {
-        super(color);
-    }
-
-    @Override
-    String shortName() {
-        return "N";
-    }
-
-    @Override
-    boolean isValidBasicMove(Board board, Position from, Position to) {
-        int dx = Math.abs(to.getX() - from.getX());
-        int dy = Math.abs(to.getY() - from.getY());
-        boolean correctShape = (dx == 1 && dy == 2) || (dx == 2 && dy == 1);
-        if (!correctShape) {
-            return false;
-        }
-        Piece target = board.get(to);
-        return target == null || target.getColor() != getColor();
-    }
-
-    @Override
-    boolean canAttack(Board board, Position from, Position to) {
-        int dx = Math.abs(to.getX() - from.getX());
-        int dy = Math.abs(to.getY() - from.getY());
-        return (dx == 1 && dy == 2) || (dx == 2 && dy == 1);
+final class Knight extends Piece {
+    Knight(Color c) { super(c); }
+    @Override PieceType getType() { return PieceType.KNIGHT; }
+    @Override char symbol() { return getColor() == Color.WHITE ? 'N' : 'n'; }
+    @Override boolean isLegalMove(Board b, Position f, Position t) {
+        int dx = Math.abs(t.getX() - f.getX());
+        int dy = Math.abs(t.getY() - f.getY());
+        return dx * dy == 2; // (1,2) or (2,1)
     }
 }
 
-// ------------------- Bishop -------------------
-class Bishop extends Piece {
+final class Pawn extends Piece {
+    Pawn(Color c) { super(c); }
+    @Override PieceType getType() { return PieceType.PAWN; }
+    @Override char symbol() { return getColor() == Color.WHITE ? 'P' : 'p'; }
+    @Override boolean isLegalMove(Board b, Position f, Position t) {
+        int dir = (getColor() == Color.WHITE) ? 1 : -1;
+        int startRank = (getColor() == Color.WHITE) ? 1 : 6;
+        int dx = t.getX() - f.getX();
+        int dy = t.getY() - f.getY();
+        Piece target = b.get(t.getX(), t.getY());
 
-    Bishop(Color color) {
-        super(color);
-    }
-
-    @Override
-    String shortName() {
-        return "B";
-    }
-
-    @Override
-    boolean isValidBasicMove(Board board, Position from, Position to) {
-        int dx = Math.abs(to.getX() - from.getX());
-        int dy = Math.abs(to.getY() - from.getY());
-        boolean isDiagonal = (dx == dy);
-        if (!isDiagonal) {
+        // forward
+        if (dx == 0) {
+            if (dy == dir && target == null) return true;
+            if (f.getY() == startRank && dy == 2 * dir && target == null) {
+                int midY = f.getY() + dir;
+                if (b.get(f.getX(), midY) == null) return true;
+            }
             return false;
         }
-        boolean clear = board.isPathClear(from, to);
-        if (!clear) {
-            return false;
+        
+        if (Math.abs(dx) == 1 && dy == dir && target != null && target.getColor() != getColor()) {
+            return true;
         }
-        Piece target = board.get(to);
-        return target == null || target.getColor() != getColor();
-    }
-
-    @Override
-    boolean canAttack(Board board, Position from, Position to) {
-        int dx = Math.abs(to.getX() - from.getX());
-        int dy = Math.abs(to.getY() - from.getY());
-        boolean isDiagonal = (dx == dy);
-        return isDiagonal && board.isPathClear(from, to);
+        return false;
     }
 }
 
-// ------------------- Queen -------------------
-class Queen extends Piece {
-
-    Queen(Color color) {
-        super(color);
-    }
-
-    @Override
-    String shortName() {
-        return "Q";
-    }
-
-    @Override
-    boolean isValidBasicMove(Board board, Position from, Position to) {
-        int dx = Math.abs(to.getX() - from.getX());
-        int dy = Math.abs(to.getY() - from.getY());
-        boolean isStraight = (from.getX() == to.getX()) || (from.getY() == to.getY());
-        boolean isDiagonal = (dx == dy);
-        if (!isStraight && !isDiagonal) {
-            return false;
-        }
-        boolean clear = board.isPathClear(from, to);
-        if (!clear) {
-            return false;
-        }
-        Piece target = board.get(to);
-        return target == null || target.getColor() != getColor();
-    }
-
-    @Override
-    boolean canAttack(Board board, Position from, Position to) {
-        int dx = Math.abs(to.getX() - from.getX());
-        int dy = Math.abs(to.getY() - from.getY());
-        boolean isStraight = (from.getX() == to.getX()) || (from.getY() == to.getY());
-        boolean isDiagonal = (dx == dy);
-        return (isStraight || isDiagonal) && board.isPathClear(from, to);
-    }
-}
-
-// ------------------- King -------------------
-class King extends Piece {
-
-    King(Color color) {
-        super(color);
-    }
-
-    @Override
-    String shortName() {
-        return "K";
-    }
-
-    @Override
-    boolean isValidBasicMove(Board board, Position from, Position to) {
-        int dx = Math.abs(to.getX() - from.getX());
-        int dy = Math.abs(to.getY() - from.getY());
-        boolean isOneSquare = (dx <= 1 && dy <= 1 && !(dx == 0 && dy == 0));
-        if (!isOneSquare) {
-            return false;
-        }
-        Piece target = board.get(to);
-        if (target != null && target.getColor() == getColor()) {
-            return false;
-        }
-        Board trial = board.copy();
-        trial.move(from, to);
-        boolean unsafe = trial.isSquareAttacked(to, getColor().opposite());
-        return !unsafe;
-    }
-
-    @Override
-    boolean canAttack(Board board, Position from, Position to) {
-        int dx = Math.abs(to.getX() - from.getX());
-        int dy = Math.abs(to.getY() - from.getY());
-        return dx <= 1 && dy <= 1 && !(dx == 0 && dy == 0);
-    }
-}
-
-// ------------------- Exception -------------------
 class IllegalMoveException extends Exception {
-    IllegalMoveException(String message) {
-        super(message);
-    }
+    IllegalMoveException(String msg) { super(msg); }
 }

@@ -1,156 +1,66 @@
 package src;
 
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 
-
 public class Board {
+    private final Piece[][] grid = new Piece[8][8];
 
-    private static final int BOARD_SIZE = 8;
+    public Board() {}
 
-    private final Piece[][] grid;
-
-    public Board() {
-        this.grid = new Piece[BOARD_SIZE][BOARD_SIZE];
-    }
-
-    public Piece get(Position position) {
-        return grid[position.getX()][position.getY()];
-    }
-
-    /**
-     * Sets a piece at a position.
-     */
-    public void set(Position position, Piece piece) {
-        grid[position.getX()][position.getY()] = piece;
-    }
-
-    /**
-     * Moves a piece from one position to another. Does not validate legality; callers must validate first.
-     */
-    public void move(Position from, Position to) {
-        Piece piece = get(from);
-        set(to, piece);
-        set(from, null);
-        if (piece != null) {
-            piece.setHasMoved(true);
-        }
-    }
-
-    /**
-     * Creates a deep copy of the board (pieces are cloned; positions are value objects).
-     */
-    public Board copy() {
-        Board copy = new Board();
-        for (int x = 0; x < BOARD_SIZE; x++) {
-            for (int y = 0; y < BOARD_SIZE; y++) {
-                Piece original = grid[x][y];
-                if (original != null) {
-                    copy.grid[x][y] = original.clonePiece();
-                }
-            }
-        }
-        return copy;
-    }
-
-    /**
-     * Sets up the standard chess initial position.
-     */
-    public void setupInitial() {
-        for (int x = 0; x < BOARD_SIZE; x++) {
-            Arrays.fill(grid[x], null);
-        }
-
+    public static Board standardSetup() {
+        Board b = new Board();
         // Pawns
-        for (int x = 0; x < BOARD_SIZE; x++) {
-            set(new Position(x, 1), new Pawn(Color.WHITE));
-            set(new Position(x, 6), new Pawn(Color.BLACK));
+        for (int x = 0; x < 8; x++) {
+            b.grid[x][1] = new Pawn(Color.WHITE);
+            b.grid[x][6] = new Pawn(Color.BLACK);
         }
-
         // Rooks
-        set(new Position(0, 0), new Rook(Color.WHITE));
-        set(new Position(7, 0), new Rook(Color.WHITE));
-        set(new Position(0, 7), new Rook(Color.BLACK));
-        set(new Position(7, 7), new Rook(Color.BLACK));
-
+        b.grid[0][0] = new Rook(Color.WHITE); b.grid[7][0] = new Rook(Color.WHITE);
+        b.grid[0][7] = new Rook(Color.BLACK); b.grid[7][7] = new Rook(Color.BLACK);
         // Knights
-        set(new Position(1, 0), new Knight(Color.WHITE));
-        set(new Position(6, 0), new Knight(Color.WHITE));
-        set(new Position(1, 7), new Knight(Color.BLACK));
-        set(new Position(6, 7), new Knight(Color.BLACK));
-
+        b.grid[1][0] = new Knight(Color.WHITE); b.grid[6][0] = new Knight(Color.WHITE);
+        b.grid[1][7] = new Knight(Color.BLACK); b.grid[6][7] = new Knight(Color.BLACK);
         // Bishops
-        set(new Position(2, 0), new Bishop(Color.WHITE));
-        set(new Position(5, 0), new Bishop(Color.WHITE));
-        set(new Position(2, 7), new Bishop(Color.BLACK));
-        set(new Position(5, 7), new Bishop(Color.BLACK));
-
+        b.grid[2][0] = new Bishop(Color.WHITE); b.grid[5][0] = new Bishop(Color.WHITE);
+        b.grid[2][7] = new Bishop(Color.BLACK); b.grid[5][7] = new Bishop(Color.BLACK);
         // Queens
-        set(new Position(3, 0), new Queen(Color.WHITE));
-        set(new Position(3, 7), new Queen(Color.BLACK));
-
+        b.grid[3][0] = new Queen(Color.WHITE);
+        b.grid[3][7] = new Queen(Color.BLACK);
         // Kings
-        set(new Position(4, 0), new King(Color.WHITE));
-        set(new Position(4, 7), new King(Color.BLACK));
+        b.grid[4][0] = new King(Color.WHITE);
+        b.grid[4][7] = new King(Color.BLACK);
+        return b;
     }
 
-    /**
-     * Checks that every intermediate square from {@code from} to {@code to} is empty (exclusive of endpoints).
-     *
-     * @return true if nothing blocks the straight/diagonal line, false otherwise
-     */
-    public boolean isPathClear(Position from, Position to) {
-        int dx = Integer.compare(to.getX(), from.getX());
-        int dy = Integer.compare(to.getY(), from.getY());
-
-        int x = from.getX() + dx;
-        int y = from.getY() + dy;
-
-        while (x != to.getX() || y != to.getY()) {
-            if (grid[x][y] != null) {
-                return false;
-            }
-            x += dx;
-            y += dy;
-        }
-        return true;
+    public Piece get(int x, int y) {
+        if (!inBounds(x, y)) return null;
+        return grid[x][y];
     }
+    public Piece get(Position p) { return get(p.getX(), p.getY()); }
+    public void set(Position p, Piece piece) { grid[p.getX()][p.getY()] = piece; }
 
-    /**
-     * Determines whether a square is attacked by any piece of the given color.
-     */
-    public boolean isSquareAttacked(Position square, Color byColor) {
-        for (int x = 0; x < BOARD_SIZE; x++) {
-            for (int y = 0; y < BOARD_SIZE; y++) {
-                Piece piece = grid[x][y];
-                if (piece != null && piece.getColor() == byColor) {
-                    Position from = new Position(x, y);
-                    boolean canAttack = piece.canAttack(this, from, square);
-                    if (canAttack) {
-                        return true;
-                    }
+    public static boolean inBounds(int x, int y) { return x >= 0 && x < 8 && y >= 0 && y < 8; }
+
+    public boolean isKingInCheck(Color color) {
+        Position kingPos = findKing(color);
+        if (kingPos == null) return false;
+        for (int x = 0; x < 8; x++) {
+            for (int y = 0; y < 8; y++) {
+                Piece enemy = grid[x][y];
+                if (enemy != null && enemy.getColor() != color) {
+                    if (isPseudoLegal(new Position(x, y), kingPos)) return true;
                 }
             }
         }
         return false;
     }
 
-    /**
-     * @return true if the specified color's king is in check.
-     */
-    public boolean isKingInCheck(Color kingColor) {
-        Position kingPosition = findKing(kingColor);
-        if (kingPosition == null) {
-            return false; // King already captured on a trial board
-        }
-        return isSquareAttacked(kingPosition, kingColor.opposite());
-    }
-
-    private Position findKing(Color color) {
-        for (int x = 0; x < BOARD_SIZE; x++) {
-            for (int y = 0; y < BOARD_SIZE; y++) {
-                Piece piece = grid[x][y];
-                if (piece instanceof King && piece.getColor() == color) {
+    public Position findKing(Color color) {
+        for (int x = 0; x < 8; x++) {
+            for (int y = 0; y < 8; y++) {
+                Piece p = grid[x][y];
+                if (p != null && p.getType() == PieceType.KING && p.getColor() == color) {
                     return new Position(x, y);
                 }
             }
@@ -158,40 +68,138 @@ public class Board {
         return null;
     }
 
-    /**
-     * Prints the board and context (players, turn, simple move list) to the console.
-     */
-    public void print(String white, String black, Color turn, List<String> history) {
-        System.out.println();
-        System.out.println("Players: White=" + white + "  Black=" + black);
-        if (turn == Color.WHITE) {
-            System.out.println("Turn: " + white + " (White)");
-        } else {
-            System.out.println("Turn: " + black + " (Black)");
-        }
+    public boolean isPseudoLegal(Position from, Position to) {
+        Piece mover = get(from);
+        if (mover == null) return false;
+        if (!inBounds(to.getX(), to.getY())) return false;
+        if (from.equals(to)) return false;
+        Piece target = get(to);
+        if (target != null && target.getColor() == mover.getColor()) return false;
+        return mover.isLegalMove(this, from, to);
+    }
 
-        for (int rank = BOARD_SIZE - 1; rank >= 0; rank--) {
-            System.out.print((rank + 1) + " ");
-            for (int file = 0; file < BOARD_SIZE; file++) {
-                Piece piece = grid[file][rank];
-                System.out.print(" ");
-                if (piece == null) {
-                    System.out.print("..");
-                } else {
-                    System.out.print(piece.symbol());
+    public boolean isLegalMove(Position from, Position to, Color turn) {
+        Piece mover = get(from);
+        if (mover == null) return false;
+        if (mover.getColor() != turn) return false;
+        if (!isPseudoLegal(from, to)) return false;
+
+        Board copy = this.copy();
+        copy.forceMove(from, to);
+        return !copy.isKingInCheck(turn);
+    }
+
+    public MoveResult move(Position from, Position to, Color turn) throws IllegalMoveException {
+        if (!isLegalMove(from, to, turn)) throw new IllegalMoveException("Illegal move");
+
+        Piece target = get(to);
+        Piece mover  = get(from);
+
+        forceMove(from, to);
+
+
+        boolean capturedKing = (target != null && target.getType() == PieceType.KING);
+        boolean check = isKingInCheck(turn.opposite());
+        return new MoveResult(capturedKing, check, target != null);
+    }
+
+    private void forceMove(Position from, Position to) {
+        Piece p = get(from);
+        set(to, p);
+        set(from, null);
+        if (p != null) p.setMoved();
+    }
+
+    public Board copy() {
+        Board b = new Board();
+        for (int x = 0; x < 8; x++) {
+            for (int y = 0; y < 8; y++) {
+                Piece p = grid[x][y];
+                if (p == null) { b.grid[x][y] = null; continue; }
+                Color c = p.getColor();
+                Piece np;
+                switch (p.getType()) {
+                    case KING:   np = new King(c);   break;
+                    case QUEEN:  np = new Queen(c);  break;
+                    case ROOK:   np = new Rook(c);   break;
+                    case BISHOP: np = new Bishop(c); break;
+                    case KNIGHT: np = new Knight(c); break;
+                    case PAWN:   np = new Pawn(c);   break;
+                    default: throw new IllegalStateException();
                 }
+                b.grid[x][y] = np;
             }
-            System.out.println();
         }
-        System.out.println("   a  b  c  d  e  f  g  h");
+        return b;
+    }
 
+    public java.util.List<String> legalMovesFrom(Position from, Color turn) {
+        List<String> out = new ArrayList<>();
+        if (!inBounds(from.getX(), from.getY())) return out;
+        Piece p = get(from);
+        if (p == null || p.getColor() != turn) return out;
+        for (int x = 0; x < 8; x++) {
+            for (int y = 0; y < 8; y++) {
+                Position to = new Position(x, y);
+                if (isLegalMove(from, to, turn)) out.add(from.toString() + to.toString());
+            }
+        }
+        return out;
+    }
+
+    public void print(Color turn, List<String> history) {
+        System.out.println("    a  b  c  d  e  f  g  h");
+        System.out.println("   -------------------------");
+        for (int y = 7; y >= 0; y--) {
+            System.out.print((y + 1) + " | ");
+            for (int x = 0; x < 8; x++) {
+                Piece p = grid[x][y];
+                char c = '.';
+                if (p != null) c = p.symbol();
+                System.out.print(c + "  ");
+            }
+            System.out.println("| " + (y + 1));
+        }
+        System.out.println("   -------------------------");
+        System.out.println("    a  b  c  d  e  f  g  h");
         if (history != null && !history.isEmpty()) {
             System.out.println("Moves: " + String.join(" ", history));
         }
-
-        if (isKingInCheck(turn)) {
-            System.out.println("! Your King is in check. You must respond.");
-        }
+        if (isKingInCheck(turn)) System.out.println("! Your King is in check.");
         System.out.println();
+    }
+
+    // ===== Promotion helpers used by Game (Option B) =====
+
+    public boolean isPromotionPending(Position to) {
+        Piece p = get(to);
+        return (p instanceof Pawn) &&
+               ((p.getColor() == Color.WHITE && to.getY() == 7) ||
+                (p.getColor() == Color.BLACK && to.getY() == 0));
+    }
+
+    public void promote(Position to, PieceType toType) {
+        Piece p = get(to);
+        if (!(p instanceof Pawn)) return;
+        Color c = p.getColor();
+        switch (toType) {
+            case QUEEN:  set(to, new Queen(c));  break;
+            case ROOK:   set(to, new Rook(c));   break;
+            case BISHOP: set(to, new Bishop(c)); break;
+            case KNIGHT: set(to, new Knight(c)); break;
+            default:     set(to, new Queen(c));
+        }
+    }
+
+
+    public static final class MoveResult {
+        public final boolean capturedKing;
+        public final boolean gaveCheck;
+        public final boolean wasCapture;
+        MoveResult(boolean cK, boolean gC, boolean wC) {
+            this.capturedKing = cK;
+            this.gaveCheck = gC;
+            this.wasCapture = wC;
+        }
     }
 }
