@@ -1,1 +1,12 @@
+# Ignore build and compiled output
+/out/
+/out/*
 *.class
+
+# Ignore IDE project files
+.idea/
+*.iml
+
+# Ignore OS-specific or temporary files
+.DS_Store
+Thumbs.db
